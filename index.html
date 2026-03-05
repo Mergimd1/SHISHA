@@ -247,7 +247,7 @@ ${mapUrl ? `🗺️ <b>GPS:</b> <a href="${mapUrl}">Hape në Maps</a>` : '🗺�
                                 </div>
                                 <div className="space-y-5">
                                     <input type="text" placeholder="EMRI MBIEMRI" className="w-full bg-white/[0.05] border border-white/10 rounded-2xl px-6 py-4 focus:border-[#D4AF37] outline-none text-white" onChange={e => setOrderData({...orderData, name: e.target.value})} />
-                                    <input type="tel" placeholder="+383 4X XXX XXX" className="w-full bg-white/[0.05] border border-white/10 rounded-2xl px-6 py-4 focus:border-[#D4AF37] outline-none text-white" onChange={e => setOrderData({...orderData, phone: e.target.value})} />
+                                    <input type="tel" placeholder="04 4X XXX XXX" className="w-full bg-white/[0.05] border border-white/10 rounded-2xl px-6 py-4 focus:border-[#D4AF37] outline-none text-white" onChange={e => setOrderData({...orderData, phone: e.target.value})} />
                                     <select className="w-full bg-zinc-900 border border-white/10 rounded-2xl px-6 py-4 focus:border-[#D4AF37] outline-none text-white appearance-none" onChange={e => setOrderData({...orderData, location: e.target.value})}>
                                         <option value="">Zgjidhni zonën...</option>
                                         {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
