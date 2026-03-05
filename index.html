@@ -37,7 +37,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect } = React;
         const { motion, AnimatePresence } = window.Motion;
 
         // --- CONFIGURATION ---
@@ -59,7 +59,6 @@
             "Zllapek (Transporti 3 euro)"
         ];
 
-        // Icon Component Helper
         const Icon = ({ name, size = 24, className = "" }) => {
             useEffect(() => { 
                 if (window.lucide) window.lucide.createIcons(); 
@@ -76,10 +75,8 @@
             const [showAdminModal, setShowAdminModal] = useState(false);
             const [tempCode, setTempCode] = useState('');
             const [allOrders, setAllOrders] = useState(() => {
-                try {
-                    const saved = localStorage.getItem('all_shisha_orders');
-                    return saved ? JSON.parse(saved) : [];
-                } catch(e) { return []; }
+                const saved = localStorage.getItem('all_shisha_orders');
+                return saved ? JSON.parse(saved) : [];
             });
 
             useEffect(() => {
@@ -119,10 +116,13 @@
             const handleLocation = () => {
                 if (navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition((pos) => {
-                        setOrderData(prev => ({ ...prev, coords: { lat: pos.coords.latitude, lng: pos.coords.longitude } }));
-                        alert("Lokacioni u ruajt me sukses! ✅");
+                        setOrderData(prev => ({ 
+                            ...prev, 
+                            coords: { lat: pos.coords.latitude, lng: pos.coords.longitude } 
+                        }));
+                        alert("Lokacioni u ruajt saktë! ✅");
                     }, (err) => {
-                        alert("Gabim gjatë marrjes së lokacionit. Sigurohuni që GPS është i ndezur.");
+                        alert("Lejoni qasjen në GPS që të gjejmë adresën në Pejë.");
                     }, { enableHighAccuracy: true });
                 } else {
                     alert("Browseri juaj nuk e mbështet GPS.");
@@ -133,8 +133,8 @@
                 setIsSending(true);
                 const transportPrice = orderData.location.includes('pa pagese') ? '0€' : '3€';
                 
-                // FIX: Saktësimi i linkut të Google Maps për Telegram
-                const mapLink = orderData.coords 
+                // --- KORRIGJIMI KRYESOR: LINKU I MAPS ---
+                const mapUrl = orderData.coords 
                     ? `https://www.google.com/maps?q=${orderData.coords.lat},${orderData.coords.lng}`
                     : null;
 
@@ -146,17 +146,16 @@
 📦 <b>Produkti:</b> ${selectedProduct.name}
 💰 <b>Çmimi:</b> ${selectedProduct.price}€
 🚚 <b>Transporti:</b> ${transportPrice} (${orderData.location})
-${mapLink ? `🗺️ <b>GPS:</b> <a href="${mapLink}">Hape në Maps</a>` : '🗺️ <b>GPS:</b> Nuk u dha'}
+${mapUrl ? `🗺️ <b>GPS:</b> <a href="${mapUrl}">Hape në Maps</a>` : '🗺️ <b>GPS:</b> Nuk u dha'}
 <b>━━━━━━━━━━━━━━━━━━</b>
-⏰ <b>Koha e pritjes:</b> 30 Minuta
+⏰ <b>Koha e dërgimit:</b> 30 Minuta
                 `;
 
                 const newOrder = { 
                     id: Date.now(), 
                     product: selectedProduct, 
-                    data: orderData, 
-                    timestamp: new Date().toLocaleString(),
-                    status: 'Në rrugë'
+                    data: { ...orderData, mapUrl }, 
+                    timestamp: new Date().toLocaleString()
                 };
 
                 try {
@@ -170,13 +169,8 @@ ${mapLink ? `🗺️ <b>GPS:</b> <a href="${mapLink}">Hape në Maps</a>` : '🗺
                         data: orderData, 
                         product: selectedProduct 
                     }));
-                } catch (e) { console.error(e); }
 
-                setStep('timer'); 
-                setTimeLeft(30 * 60);
-
-                try {
-                    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
                         method: 'POST', 
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ 
@@ -185,35 +179,14 @@ ${mapLink ? `🗺️ <b>GPS:</b> <a href="${mapLink}">Hape në Maps</a>` : '🗺
                             parse_mode: 'HTML' 
                         })
                     });
-                    const res = await response.json();
-                    if (!res.ok) {
-                        alert("Telegram Error: " + res.description + "\nSigurohuni që Bot-i është Admin në grup.");
-                    }
+                    
+                    setStep('timer'); 
+                    setTimeLeft(30 * 60);
                 } catch (error) {
                     console.error(error);
                 } finally { 
                     setIsSending(false); 
                 }
-            };
-
-            const testTelegram = async () => {
-                try {
-                    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            chat_id: TELEGRAM_CHAT_ID,
-                            text: "✅ <b>TEST:</b> Lidhja me Telegram punon saktë!",
-                            parse_mode: 'HTML'
-                        })
-                    });
-                    const result = await response.json();
-                    if (result.ok) {
-                        alert("Mesazhi testues u dërgua me sukses! ✅");
-                    } else {
-                        alert("GABIM: " + result.description + "\nSigurohuni që Bot-i është ADMIN.");
-                    }
-                } catch (e) { alert("Gabim rrjeti."); }
             };
 
             return (
@@ -261,10 +234,8 @@ ${mapLink ? `🗺️ <b>GPS:</b> <a href="${mapLink}">Hape në Maps</a>` : '🗺
                                         </div>
                                     ))}
                                 </div>
-                                <div className="flex flex-col items-center gap-6">
-                                    <button onClick={() => setStep('home')} className="text-zinc-500 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors flex items-center gap-2">
-                                        <Icon name="x" size={14} /> Kthehu mbrapa
-                                    </button>
+                                <div className="flex flex-col items-center">
+                                    <button onClick={() => setStep('home')} className="text-zinc-500 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors">Kthehu mbrapa</button>
                                 </div>
                             </motion.div>
                         )}
@@ -273,7 +244,6 @@ ${mapLink ? `🗺️ <b>GPS:</b> <a href="${mapLink}">Hape në Maps</a>` : '🗺
                             <motion.div key="details" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-md bg-white/[0.03] border border-white/10 p-10 rounded-[3rem] space-y-8 shadow-2xl">
                                 <div className="text-center">
                                     <h2 className="text-2xl font-cinzel font-bold text-[#D4AF37] uppercase tracking-widest">Detajet e Porosisë</h2>
-                                    <p className="text-zinc-500 text-xs mt-2 italic">{selectedProduct.name} - {selectedProduct.price}€</p>
                                 </div>
                                 <div className="space-y-5">
                                     <input type="text" placeholder="EMRI MBIEMRI" className="w-full bg-white/[0.05] border border-white/10 rounded-2xl px-6 py-4 focus:border-[#D4AF37] outline-none text-white" onChange={e => setOrderData({...orderData, name: e.target.value})} />
@@ -281,80 +251,54 @@ ${mapLink ? `🗺️ <b>GPS:</b> <a href="${mapLink}">Hape në Maps</a>` : '🗺
                                     <select className="w-full bg-zinc-900 border border-white/10 rounded-2xl px-6 py-4 focus:border-[#D4AF37] outline-none text-white appearance-none" onChange={e => setOrderData({...orderData, location: e.target.value})}>
                                         <option value="">Zgjidhni zonën...</option>
                                         {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
-                                        <option value="Tjetër">Tjetër (Qytet)</option>
                                     </select>
-                                    <button onClick={handleLocation} className={`w-full flex items-center justify-center gap-3 py-4 border rounded-2xl text-sm font-bold uppercase tracking-widest transition-all ${orderData.coords ? 'border-green-500/50 text-green-500 bg-green-500/5' : 'border-[#D4AF37]/30 text-[#D4AF37] hover:bg-[#D4AF37]/10'}`}>
-                                        {orderData.coords ? <><Icon name="map" size={18} /> Lokacioni u ruajt ✅</> : <><Icon name="map-pin" size={18} /> Vendos Location (GPS)</>}
+                                    <button onClick={handleLocation} className={`w-full flex items-center justify-center gap-3 py-4 border rounded-2xl text-sm font-bold uppercase transition-all ${orderData.coords ? 'border-green-500 text-green-500 bg-green-500/5' : 'border-[#D4AF37]/30 text-[#D4AF37]'}`}>
+                                        <Icon name="map-pin" size={18} /> {orderData.coords ? 'Lokacioni u Ruajt ✅' : 'Dërgo Lokacionin (GPS)'}
                                     </button>
                                 </div>
-                                <button disabled={!orderData.name || !orderData.phone || !orderData.location || isSending} onClick={sendToTelegram} className="w-full bg-gradient-to-r from-[#D4AF37] to-[#F9E4B7] text-black font-bold py-5 rounded-2xl shadow-xl disabled:opacity-30 transition-all flex items-center justify-center gap-3 active:scale-95 text-lg uppercase tracking-widest">
-                                    {isSending ? <div className="w-6 h-6 border-2 border-black border-t-transparent rounded-full animate-spin"></div> : <><Icon name="send" size={20} /> Konfirmo</>}
+                                <button disabled={!orderData.name || !orderData.phone || !orderData.location || isSending} onClick={sendToTelegram} className="w-full bg-gradient-to-r from-[#D4AF37] to-[#F9E4B7] text-black font-bold py-5 rounded-2xl shadow-xl disabled:opacity-30 flex items-center justify-center gap-3 text-lg uppercase tracking-widest">
+                                    {isSending ? <div className="w-6 h-6 border-2 border-black border-t-transparent rounded-full animate-spin"></div> : "Konfirmo Porosinë"}
                                 </button>
-                                <button onClick={() => setStep('selection')} className="w-full text-zinc-600 text-[10px] font-bold uppercase tracking-widest hover:text-white transition-colors">Kthehu mbrapa</button>
+                                <button onClick={() => setStep('selection')} className="w-full text-zinc-600 text-[10px] font-bold uppercase text-center">Anulo</button>
                             </motion.div>
                         )}
 
                         {step === 'timer' && (
                             <motion.div key="timer" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="text-center space-y-12">
-                                <div className="relative w-72 h-72 mx-auto flex items-center justify-center">
-                                    <svg className="absolute inset-0 w-full h-full -rotate-90">
-                                        <circle cx="144" cy="144" r="130" fill="none" stroke="rgba(212, 175, 55, 0.05)" strokeWidth="10" />
-                                        <motion.circle cx="144" cy="144" r="130" fill="none" stroke="#D4AF37" strokeWidth="10" strokeDasharray="816" initial={{ strokeDashoffset: 816 }} animate={{ strokeDashoffset: 816 - (816 * ((timeLeft || 0) / (30 * 60))) }} transition={{ duration: 1, ease: "linear" }} strokeLinecap="round" />
-                                    </svg>
+                                <div className="relative w-64 h-64 mx-auto flex items-center justify-center">
                                     <div className="text-center relative z-10">
                                         <div className="text-6xl font-bold text-[#D4AF37]">{formatTime(timeLeft || 0)}</div>
-                                        <div className="text-[10px] text-zinc-500 uppercase tracking-[0.3em] font-bold mt-3">Minuta të mbetura</div>
+                                        <div className="text-[10px] text-zinc-500 uppercase font-bold mt-2">Minuta të mbetura</div>
                                     </div>
                                     <div className="absolute inset-0 bg-[#D4AF37] blur-[80px] opacity-10 rounded-full"></div>
                                 </div>
-                                <div className="space-y-4">
-                                    <h2 className="text-4xl font-cinzel font-bold text-[#D4AF37] uppercase tracking-widest">Porosia u Nis!</h2>
-                                    <p className="text-zinc-500 max-w-xs mx-auto text-sm">Shisha juaj po përgatitet dhe do të arrijë brenda 30 minutave.</p>
-                                </div>
-                                <div className="bg-white/[0.03] border border-[#D4AF37]/20 px-8 py-4 rounded-full inline-flex items-center gap-3 shadow-2xl">
-                                    <div className="w-2 h-2 bg-[#D4AF37] rounded-full animate-pulse"></div>
-                                    <span className="text-[10px] text-[#D4AF37] font-bold uppercase tracking-[0.2em]">Statusi: Në rrugë e sipër 🚚</span>
-                                </div>
-                                <div className="pt-8 flex flex-col items-center gap-4">
-                                    <button onClick={() => { localStorage.removeItem('shisha_order'); setStep('home'); setTimeLeft(null); setSelectedProduct(null); setOrderData({ name: '', phone: '', location: '', coords: null }); }} className="px-8 py-3 bg-white/5 border border-white/10 rounded-full text-zinc-500 text-[10px] font-bold uppercase tracking-widest hover:text-red-500 transition-all">Anulo Porosinë / Porosi e Re</button>
-                                </div>
+                                <h2 className="text-4xl font-cinzel font-bold text-[#D4AF37] uppercase">Porosia u Nis!</h2>
+                                <button onClick={() => { localStorage.removeItem('shisha_order'); setStep('home'); }} className="px-8 py-3 bg-white/5 border border-white/10 rounded-full text-zinc-500 text-[10px] font-bold uppercase tracking-widest">Porosi e Re</button>
                             </motion.div>
                         )}
 
                         {step === 'admin' && (
                             <motion.div key="admin" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-4xl space-y-8">
                                 <div className="flex justify-between items-center">
-                                    <h2 className="text-3xl font-cinzel font-bold text-[#D4AF37]">Paneli i Porosive</h2>
-                                    <div className="flex gap-2">
-                                        <button onClick={testTelegram} className="p-2 bg-blue-500/10 text-blue-400 rounded-full px-4 text-[10px] font-bold uppercase">Testo Telegramin</button>
-                                        <button onClick={() => { if(confirm("Fshi të gjitha?")) { localStorage.removeItem('all_shisha_orders'); setAllOrders([]); } }} className="p-2 bg-red-500/10 text-red-500 rounded-full px-4 text-[10px] font-bold uppercase">Fshi të Gjitha</button>
-                                        <button onClick={() => setStep('home')} className="p-2 bg-white/5 rounded-full"><Icon name="x" /></button>
-                                    </div>
+                                    <h2 className="text-3xl font-cinzel font-bold text-[#D4AF37]">Porositë</h2>
+                                    <button onClick={() => setStep('home')} className="p-2 bg-white/5 rounded-full"><Icon name="x" /></button>
                                 </div>
                                 <div className="grid gap-4">
-                                    {allOrders.length === 0 ? <div className="text-center py-20 text-zinc-500">Nuk ka porosi të regjistruara.</div> : allOrders.map(order => (
+                                    {allOrders.map(order => (
                                         <div key={order.id} className="bg-white/[0.03] border border-white/10 p-6 rounded-3xl flex flex-col md:flex-row justify-between gap-4">
                                             <div>
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <span className="text-xs font-bold text-[#D4AF37] uppercase tracking-widest">{order.timestamp}</span>
-                                                    <span className="px-2 py-0.5 bg-green-500/10 text-green-500 text-[10px] font-bold rounded-full uppercase">Në rrugë</span>
-                                                </div>
+                                                <p className="text-xs font-bold text-[#D4AF37] uppercase">{order.timestamp}</p>
                                                 <h3 className="text-xl font-bold">{order.data.name}</h3>
                                                 <p className="text-zinc-400 text-sm">{order.data.phone} • {order.data.location}</p>
-                                                <p className="text-zinc-500 text-xs mt-1">Produkti: {order.product.name} ({order.product.price}€)</p>
+                                                <p className="text-zinc-500 text-xs mt-1">Produkti: {order.product.name}</p>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                {/* FIX: Saktësimi i linkut të Google Maps për Panelin Admin */}
-                                                {order.data.coords && (
-                                                    <a 
-                                                        href={`https://www.google.com/maps?q=${order.data.coords.lat},${order.data.coords.lng}`} 
-                                                        target="_blank" 
-                                                        className="p-4 bg-[#D4AF37]/10 text-[#D4AF37] rounded-2xl hover:bg-[#D4AF37] hover:text-black transition-all"
-                                                    >
+                                                {order.data.mapUrl && (
+                                                    <a href={order.data.mapUrl} target="_blank" className="p-4 bg-[#D4AF37] text-black rounded-2xl hover:scale-105 transition-all">
                                                         <Icon name="map-pin" size={20} />
                                                     </a>
                                                 )}
-                                                <button onClick={() => { const updated = allOrders.filter(o => o.id !== order.id); setAllOrders(updated); localStorage.setItem('all_shisha_orders', JSON.stringify(updated)); }} className="p-4 bg-red-500/10 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all"><Icon name="x" size={20} /></button>
+                                                <button onClick={() => { const updated = allOrders.filter(o => o.id !== order.id); setAllOrders(updated); localStorage.setItem('all_shisha_orders', JSON.stringify(updated)); }} className="p-4 bg-red-500/10 text-red-500 rounded-2xl"><Icon name="trash" size={20} /></button>
                                             </div>
                                         </div>
                                     ))}
@@ -366,17 +310,13 @@ ${mapLink ? `🗺️ <b>GPS:</b> <a href="${mapLink}">Hape në Maps</a>` : '🗺
                     {showAdminModal && (
                         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
                             <div className="bg-zinc-900 border border-white/10 p-8 rounded-[2rem] w-full max-w-xs space-y-6 shadow-2xl">
-                                <h3 className="text-center font-bold text-[#D4AF37] uppercase tracking-widest">Kodi i Qasjes</h3>
+                                <h3 className="text-center font-bold text-[#D4AF37] uppercase">Kodi Admin</h3>
                                 <input type="password" autoFocus className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-center text-xl tracking-[0.5em] outline-none focus:border-[#D4AF37]" onChange={e => setTempCode(e.target.value)} />
-                                <div className="flex gap-2">
-                                    <button onClick={() => setShowAdminModal(false)} className="flex-1 py-3 text-zinc-500 text-xs font-bold uppercase">Anulo</button>
-                                    <button onClick={() => { if(tempCode === ADMIN_CODE) { setStep('admin'); setShowAdminModal(false); setTempCode(''); } else alert("Kodi i gabuar!"); }} className="flex-1 py-3 bg-[#D4AF37] text-black rounded-xl text-xs font-bold uppercase">Hyr</button>
-                                </div>
+                                <button onClick={() => { if(tempCode === ADMIN_CODE) { setStep('admin'); setShowAdminModal(false); setTempCode(''); } else alert("Gabim!"); }} className="w-full py-3 bg-[#D4AF37] text-black rounded-xl font-bold uppercase">Hyr</button>
+                                <button onClick={() => setShowAdminModal(false)} className="w-full text-zinc-500 text-xs font-bold uppercase">Mbyll</button>
                             </div>
                         </div>
                     )}
-
-                    <footer className="fixed bottom-8 text-[9px] text-zinc-700 uppercase tracking-[0.5em] font-bold">Luxury Experience • Pejë 2026</footer>
                 </div>
             );
         }
