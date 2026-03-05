@@ -17,16 +17,17 @@
         .font-cinzel { font-family: 'Cinzel', serif; }
         @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
         .animate-float { animation: float 6s ease-in-out infinite; }
-        select option { color: black; }
+        .glass { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect } = React;
         const { motion, AnimatePresence } = window.Motion;
 
+        // --- KONFIGURIMI ---
         const TELEGRAM_BOT_TOKEN = '8776970813:AAFRL80-ievAXX-g7nGoaCI7uLiLjCIuwFQ';
         const TELEGRAM_CHAT_ID = '-1003530698471';
         const ADMIN_CODE = '0391001000';
@@ -39,21 +40,18 @@
         ];
 
         const LOCATIONS = [
-            "Peja (Transporti pa pagese)", "Loxhe (Transporti 3 euro)", "Qyshk (Transporti 3 euro)",
-            "Graboc (Transporti 3 euro)", "Raushiq (Transporti 3 euro)", "Vitomeric (Transporti 3 euro)",
-            "Pavlan (Transporti 3 euro)", "Zahaq (Transporti 3 euro)", "Katund i Ri (Transporti 3 euro)",
-            "Zllapek (Transporti 3 euro)"
+            "Peja (Transporti pa pagese)", "Loxhe (3€)", "Qyshk (3€)", "Graboc (3€)", 
+            "Raushiq (3€)", "Vitomeric (3€)", "Pavlan (3€)", "Zahaq (3€)", 
+            "Katund i Ri (3€)", "Zllapek (3€)"
         ];
 
-        // Komponenti i ikonave i mbrojtur nga gabimet
         const Icon = ({ name, size = 24, className = "" }) => {
             const [svg, setSvg] = useState('');
             useEffect(() => {
                 if (window.lucide && window.lucide.icons[name]) {
-                    const iconSvg = window.lucide.icons[name].toSvg({ width: size, height: size, class: className });
-                    setSvg(iconSvg);
+                    setSvg(window.lucide.icons[name].toSvg({ width: size, height: size, class: className }));
                 }
-            }, [name, size, className]);
+            }, [name]);
             return <span dangerouslySetInnerHTML={{ __html: svg }} />;
         };
 
@@ -62,201 +60,132 @@
             const [selectedProduct, setSelectedProduct] = useState(null);
             const [orderData, setOrderData] = useState({ name: '', phone: '', location: '', coords: null });
             const [timeLeft, setTimeLeft] = useState(null);
-            const [isSending, setIsSending] = useState(false);
             const [showAdminModal, setShowAdminModal] = useState(false);
             const [tempCode, setTempCode] = useState('');
-            const [allOrders, setAllOrders] = useState(() => {
-                const saved = localStorage.getItem('all_shisha_orders');
-                return saved ? JSON.parse(saved) : [];
-            });
+            const [allOrders, setAllOrders] = useState(() => JSON.parse(localStorage.getItem('all_shisha_orders') || '[]'));
 
-            // Kontrolli i porosisë aktive në refresh
+            // Kontrolli i timerit në nisje
             useEffect(() => {
-                const savedOrder = localStorage.getItem('shisha_order');
-                if (savedOrder) {
-                    const { expiry, data, product } = JSON.parse(savedOrder);
+                const saved = localStorage.getItem('shisha_order');
+                if (saved) {
+                    const { expiry, data, product } = JSON.parse(saved);
                     const now = Date.now();
                     if (now < expiry) {
-                        setOrderData(data); 
-                        setSelectedProduct(product); 
-                        setStep('timer');
+                        setOrderData(data); setSelectedProduct(product); setStep('timer');
                         setTimeLeft(Math.floor((expiry - now) / 1000));
                     }
                 }
             }, []);
 
-            // Timer-i
             useEffect(() => {
-                if (timeLeft === null || timeLeft <= 0) return;
-                const timer = setInterval(() => {
-                    setTimeLeft(prev => {
-                        if (prev <= 1) {
-                            clearInterval(timer);
-                            localStorage.removeItem('shisha_order');
-                            setStep('home');
-                            return 0;
-                        }
-                        return prev - 1;
-                    });
-                }, 1000);
-                return () => clearInterval(timer);
+                if (!timeLeft || timeLeft <= 0) return;
+                const t = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
+                return () => clearInterval(t);
             }, [timeLeft]);
 
-            const handleLocation = () => {
-                if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition((pos) => {
-                        setOrderData(prev => ({ ...prev, coords: { lat: pos.coords.latitude, lng: pos.coords.longitude } }));
-                        alert("Lokacioni u ruajt me sukses! ✅");
-                    }, () => alert("Ju lutem aktivizoni GPS-in."));
-                }
-            };
-
-            const sendOrder = async () => {
-                if (!orderData.name || !orderData.phone || !orderData.location) {
-                    alert("Ju lutem plotësoni të gjitha fushat.");
-                    return;
-                }
-                setIsSending(true);
-                const transport = orderData.location.includes('pa pagese') ? '0€' : '3€';
-                const mapsUrl = orderData.coords ? `https://www.google.com/maps?q=${orderData.coords.lat},${orderData.coords.lng}` : 'Nuk u dërgua';
+            const handleOrder = async () => {
+                if (!orderData.name || !orderData.phone || !orderData.location) return alert("Plotësoni të gjitha fushat!");
                 
-                const message = `🚀 <b>POROSI E RE</b>\n\n👤 Klienti: ${orderData.name}\n📞 Tel: ${orderData.phone}\n📦 Produkti: ${selectedProduct.name}\n🚚 Transporti: ${transport}\n📍 Lokacioni: ${orderData.location}\n\n🗺️ <a href="${mapsUrl}">Hape në Google Maps</a>`;
+                const mapsUrl = orderData.coords ? `https://www.google.com/maps?q=${orderData.coords.lat},${orderData.coords.lng}` : 'Nuk ka GPS';
+                const msg = `🚀 POROSI E RE\n👤: ${orderData.name}\n📞: ${orderData.phone}\n📦: ${selectedProduct.name}\n📍: ${orderData.location}\n🗺️: ${mapsUrl}`;
 
                 try {
                     await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: message, parse_mode: 'HTML' })
+                        body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: msg })
                     });
                     
                     const newOrder = { id: Date.now(), product: selectedProduct, data: orderData, timestamp: new Date().toLocaleString() };
-                    const updatedOrders = [newOrder, ...allOrders];
-                    setAllOrders(updatedOrders);
-                    localStorage.setItem('all_shisha_orders', JSON.stringify(updatedOrders));
-                    localStorage.setItem('shisha_order', JSON.stringify({ expiry: Date.now() + (30 * 60 * 1000), data: orderData, product: selectedProduct }));
+                    const updated = [newOrder, ...allOrders];
+                    setAllOrders(updated);
+                    localStorage.setItem('all_shisha_orders', JSON.stringify(updated));
+                    localStorage.setItem('shisha_order', JSON.stringify({ expiry: Date.now() + 1800000, data: orderData, product: selectedProduct }));
                     
-                    setStep('timer');
-                    setTimeLeft(30 * 60);
-                } catch (e) {
-                    alert("Gabim gjatë dërgimit. Provoni përsëri.");
-                } finally {
-                    setIsSending(false);
-                }
+                    setStep('timer'); setTimeLeft(1800);
+                } catch (e) { alert("Gabim në dërgim!"); }
             };
 
             return (
-                <div className="min-h-screen flex flex-col items-center justify-center p-4">
+                <div className="min-h-screen flex items-center justify-center p-4 bg-[#0A0A0A]">
                     <AnimatePresence mode="wait">
                         {step === 'home' && (
-                            <motion.div key="home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center space-y-8">
-                                <img src="https://images.unsplash.com/photo-1527030280862-64139fba04ca?q=80&w=500" className="w-48 h-48 rounded-full border-4 border-[#D4AF37] mx-auto animate-float object-cover shadow-2xl" />
-                                <h1 className="text-5xl font-cinzel font-bold text-[#D4AF37] tracking-tighter">LUXURY SHISHA</h1>
-                                <div className="space-y-4">
-                                    <button onClick={() => setStep('selection')} className="block w-full bg-[#D4AF37] text-black font-bold py-4 px-12 rounded-full text-xl uppercase hover:scale-105 transition-transform">Porosit Tani</button>
-                                    <button onClick={() => setShowAdminModal(true)} className="text-zinc-600 uppercase text-xs tracking-widest hover:text-zinc-400">Paneli i Porosive</button>
-                                </div>
+                            <motion.div key="h" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center">
+                                <img src="https://images.unsplash.com/photo-1527030280862-64139fba04ca?q=80&w=500" className="w-48 h-48 rounded-full border-4 border-[#D4AF37] mx-auto animate-float object-cover shadow-[0_0_50px_rgba(212,175,55,0.2)]" />
+                                <h1 className="text-5xl font-cinzel font-bold text-[#D4AF37] my-8 tracking-widest">LUXURY SHISHA</h1>
+                                <button onClick={() => setStep('selection')} className="bg-[#D4AF37] text-black font-bold py-4 px-12 rounded-full text-xl uppercase hover:scale-105 transition-transform">Porosit Tani</button>
+                                <button onClick={() => setShowAdminModal(true)} className="block mx-auto mt-10 text-zinc-700 text-xs tracking-[0.3em]">ADMIN PANEL</button>
                             </motion.div>
                         )}
 
                         {step === 'selection' && (
-                            <motion.div key="selection" initial={{ x: 50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -50, opacity: 0 }} className="w-full max-w-md space-y-6">
-                                <h2 className="text-2xl font-cinzel text-center text-[#D4AF37]">ZGJIDH PRODUKTIN</h2>
-                                <div className="grid gap-4">
-                                    {PRODUCTS.map(p => (
-                                        <div key={p.id} onClick={() => { setSelectedProduct(p); setStep('details'); }} className="bg-white/5 border border-white/10 p-5 rounded-2xl flex justify-between items-center cursor-pointer hover:border-[#D4AF37] transition-all group">
-                                            <div className="flex items-center gap-4">
-                                                <div className="text-[#D4AF37] group-hover:scale-110 transition-transform"><Icon name={p.icon} /></div>
-                                                <div>
-                                                    <h3 className="font-bold">{p.name}</h3>
-                                                    <p className="text-xs text-zinc-500">{p.desc}</p>
-                                                </div>
-                                            </div>
-                                            <span className="text-xl font-bold">{p.price}€</span>
+                            <motion.div key="s" initial={{ x: 50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="w-full max-w-md space-y-4">
+                                <h2 className="text-2xl font-cinzel text-center text-[#D4AF37] mb-6">ZGJIDHNI PRODUKTIN</h2>
+                                {PRODUCTS.map(p => (
+                                    <div key={p.id} onClick={() => { setSelectedProduct(p); setStep('details'); }} className="glass p-5 rounded-2xl flex justify-between items-center cursor-pointer hover:border-[#D4AF37] transition-all">
+                                        <div className="flex items-center gap-4">
+                                            <Icon name={p.icon} className="text-[#D4AF37]" />
+                                            <div><h3 className="font-bold">{p.name}</h3><p className="text-xs text-zinc-500">{p.desc}</p></div>
                                         </div>
-                                    ))}
-                                </div>
-                                <button onClick={() => setStep('home')} className="block mx-auto text-zinc-500">Anulo</button>
+                                        <span className="text-xl font-bold text-[#D4AF37]">{p.price}€</span>
+                                    </div>
+                                ))}
+                                <button onClick={() => setStep('home')} className="w-full text-zinc-500 pt-4">Kthehu</button>
                             </motion.div>
                         )}
 
                         {step === 'details' && (
-                            <motion.div key="details" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="w-full max-w-md bg-white/5 p-8 rounded-3xl space-y-5 border border-white/10">
-                                <h2 className="text-xl font-cinzel text-center text-[#D4AF37]">DETAJET E KONTAKTIT</h2>
-                                <input type="text" placeholder="Emri Mbiemri" className="w-full bg-black border border-white/10 p-4 rounded-xl focus:border-[#D4AF37] outline-none" onChange={e => setOrderData({...orderData, name: e.target.value})} />
-                                <input type="tel" placeholder="Nr. Telefonit" className="w-full bg-black border border-white/10 p-4 rounded-xl focus:border-[#D4AF37] outline-none" onChange={e => setOrderData({...orderData, phone: e.target.value})} />
-                                <select className="w-full bg-black border border-white/10 p-4 rounded-xl outline-none" onChange={e => setOrderData({...orderData, location: e.target.value})}>
+                            <motion.div key="d" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass p-8 rounded-3xl w-full max-w-md space-y-4">
+                                <h2 className="text-xl font-cinzel text-center text-[#D4AF37]">DETAJET E POROSISË</h2>
+                                <input type="text" placeholder="Emri Mbiemri" className="w-full bg-black/50 border border-white/10 p-4 rounded-xl outline-none focus:border-[#D4AF37]" onChange={e => setOrderData({...orderData, name: e.target.value})} />
+                                <input type="tel" placeholder="Nr. Telefonit" className="w-full bg-black/50 border border-white/10 p-4 rounded-xl outline-none focus:border-[#D4AF37]" onChange={e => setOrderData({...orderData, phone: e.target.value})} />
+                                <select className="w-full bg-black/50 border border-white/10 p-4 rounded-xl outline-none" onChange={e => setOrderData({...orderData, location: e.target.value})}>
                                     <option value="">Zgjidh lokacionin...</option>
                                     {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
                                 </select>
-                                <button onClick={handleLocation} className="w-full py-4 border border-[#D4AF37]/30 text-[#D4AF37] rounded-xl font-bold text-sm">
+                                <button onClick={() => navigator.geolocation.getCurrentPosition(p => { setOrderData({...orderData, coords: {lat: p.coords.latitude, lng: p.coords.longitude}}); alert("GPS OK! ✅"); })} className="w-full py-3 border border-[#D4AF37]/20 text-[#D4AF37] rounded-xl text-sm font-bold">
                                     {orderData.coords ? "LOKACIONI U RUAJT ✓" : "DËRGO LOKACIONIN (GPS)"}
                                 </button>
-                                <button onClick={sendOrder} disabled={isSending} className="w-full py-5 bg-[#D4AF37] text-black font-bold rounded-xl uppercase">
-                                    {isSending ? "Duke u dërguar..." : "Konfirmo Porosinë"}
-                                </button>
-                                <button onClick={() => setStep('selection')} className="block mx-auto text-zinc-500">Mbrapa</button>
+                                <button onClick={handleOrder} className="w-full py-5 bg-[#D4AF37] text-black font-bold rounded-xl uppercase shadow-lg shadow-[#D4AF37]/20">Konfirmo</button>
+                                <button onClick={() => setStep('selection')} className="w-full text-zinc-500 text-sm">Mbrapa</button>
                             </motion.div>
                         )}
 
                         {step === 'timer' && (
-                            <motion.div key="timer" className="text-center space-y-6">
-                                <div className="text-8xl font-bold text-[#D4AF37] tabular-nums">
-                                    {Math.floor(timeLeft/60)}:{String(timeLeft%60).padStart(2,'0')}
-                                </div>
-                                <h2 className="text-2xl font-cinzel">POROSIA ËSHTË RRUGËS! 🚚</h2>
-                                <p className="text-zinc-500 text-sm">Ju lutem prisni, korrieri do ju kontaktojë shpejt.</p>
-                                <button onClick={() => { localStorage.removeItem('shisha_order'); setStep('home'); }} className="text-red-500 text-xs font-bold uppercase tracking-widest mt-10">Anulo Porosinë</button>
+                            <motion.div key="t" className="text-center space-y-6">
+                                <div className="text-8xl font-bold text-[#D4AF37] tabular-nums">{Math.floor(timeLeft/60)}:{String(timeLeft%60).padStart(2,'0')}</div>
+                                <h2 className="text-2xl font-cinzel">POROSIA RRUGËS! 🚚</h2>
+                                <button onClick={() => { localStorage.removeItem('shisha_order'); setStep('home'); }} className="text-red-500 text-xs font-bold uppercase tracking-widest pt-10">Anulo / Porosi e re</button>
                             </motion.div>
                         )}
 
                         {step === 'admin' && (
-                            <motion.div key="admin" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-4xl space-y-6">
-                                <div className="flex justify-between items-center">
-                                    <h2 className="text-2xl font-cinzel text-[#D4AF37]">HISTORIKU I POROSIVE</h2>
-                                    <button onClick={() => setStep('home')} className="bg-white/10 px-4 py-2 rounded-lg">Mbyll</button>
+                            <motion.div key="a" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-2xl space-y-4">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-cinzel text-[#D4AF37]">POROSITË</h2>
+                                    <button onClick={() => setStep('home')} className="text-zinc-500">Mbyll</button>
                                 </div>
-                                <div className="grid gap-3">
-                                    {allOrders.length === 0 ? <p className="text-zinc-600 text-center py-10">Asnjë porosi ende.</p> : allOrders.map(o => (
-                                        <div key={o.id} className="bg-white/5 p-4 rounded-xl flex justify-between items-center border border-white/5">
-                                            <div>
-                                                <p className="text-[10px] text-[#D4AF37]">{o.timestamp}</p>
-                                                <p className="font-bold">{o.data.name} - <span className="text-zinc-400">{o.product.name}</span></p>
-                                                <p className="text-xs text-zinc-500">{o.data.phone} | {o.data.location}</p>
-                                            </div>
-                                            {o.data.coords && (
-                                                <a href={`https://www.google.com/maps?q=${o.data.coords.lat},${o.data.coords.lng}`} target="_blank" className="p-3 bg-[#D4AF37] text-black rounded-lg">
-                                                    <Icon name="MapPin" size={18} />
-                                                </a>
-                                            )}
+                                {allOrders.map(o => (
+                                    <div key={o.id} className="glass p-4 rounded-xl flex justify-between items-center">
+                                        <div>
+                                            <p className="text-[10px] text-[#D4AF37]">{o.timestamp}</p>
+                                            <p className="font-bold">{o.data.name} - {o.product.name}</p>
+                                            <p className="text-xs text-zinc-400">{o.data.phone} | {o.data.location}</p>
                                         </div>
-                                    ))}
-                                    {allOrders.length > 0 && (
-                                        <button onClick={() => { if(confirm("A jeni i sigurt?")) { localStorage.removeItem('all_shisha_orders'); setAllOrders([]); } }} className="text-red-500 text-xs py-4">FSHIJ TË GJITHA</button>
-                                    )}
-                                </div>
+                                        {o.data.coords && <a href={`https://www.google.com/maps?q=${o.data.coords.lat},${o.data.coords.lng}`} target="_blank" className="p-3 bg-[#D4AF37] text-black rounded-lg"><Icon name="MapPin" size={18}/></a>}
+                                    </div>
+                                ))}
                             </motion.div>
                         )}
                     </AnimatePresence>
 
-                    {/* MODAL I KODIT TË ADMINIT */}
                     {showAdminModal && (
                         <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-6 z-50">
-                            <div className="bg-zinc-900 p-8 rounded-3xl w-full max-w-xs space-y-6 border border-white/10 text-center">
-                                <h3 className="font-bold text-[#D4AF37]">AUTENTIKIMI</h3>
-                                <input 
-                                    type="password" 
-                                    placeholder="KODI" 
-                                    className="w-full bg-black border border-white/10 p-4 rounded-xl text-center text-2xl tracking-[1em]" 
-                                    onChange={e => setTempCode(e.target.value)}
-                                    onKeyPress={(e) => { if(e.key === 'Enter' && tempCode === ADMIN_CODE) { setStep('admin'); setShowAdminModal(false); } }}
-                                />
-                                <button 
-                                    onClick={() => { if(tempCode === ADMIN_CODE) { setStep('admin'); setShowAdminModal(false); } else { alert("Kodi i gabuar!"); } }} 
-                                    className="w-full py-4 bg-[#D4AF37] text-black font-bold rounded-xl"
-                                >
-                                    HYR
-                                </button>
-                                <button onClick={() => setShowAdminModal(false)} className="text-zinc-500 text-sm">Mbyll</button>
+                            <div className="glass p-8 rounded-3xl w-full max-w-xs space-y-6 text-center">
+                                <h3 className="font-bold text-[#D4AF37] tracking-widest uppercase">Kodi</h3>
+                                <input type="password" autoFocus className="w-full bg-black border border-white/10 p-4 rounded-xl text-center text-2xl tracking-[0.5em] outline-none" onChange={e => setTempCode(e.target.value)} />
+                                <button onClick={() => { if(tempCode === ADMIN_CODE) { setStep('admin'); setShowAdminModal(false); } else alert("Gabim!"); }} className="w-full py-4 bg-[#D4AF37] text-black font-bold rounded-xl">HYR</button>
+                                <button onClick={() => setShowAdminModal(false)} className="text-zinc-500">Anulo</button>
                             </div>
                         </div>
                     )}
